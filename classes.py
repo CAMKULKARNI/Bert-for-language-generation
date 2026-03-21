@@ -1,6 +1,9 @@
+import gc
+
 from flax import nnx
 import jax 
 import jax.numpy as jnp
+from tqdm import tqdm # For a nice progress bar
 
 
 class EncoderLayer(nnx.Module):
@@ -89,10 +92,42 @@ class BERTForCausalLM(nnx.Module):
 
         return logits
 
-    def generate(self, ids, max_new_tokens):
-        for _ in range(max_new_tokens):
-            logits = self(ids[:, -self.max_seq_len:])
-            next_token = jnp.argmax(logits, axis=-1, keepdims=True)
-            ids = jnp.concatenate([ids, next_token], axis=1)
+    def generate(self, input_ids, attention_mask, max_new_tokens, temperature=0.8, greedy=False, yield_token=False):
+        key = jax.random.PRNGKey(1319) 
 
-        return ids
+        for _ in tqdm(range(max_new_tokens)):
+            # Slice to strictly enforce the sliding window limit (max 64 tokens)
+            curr_input_ids = input_ids[:, -self.max_seq_len:]
+            curr_attention_mask = attention_mask[:, -self.max_seq_len:]
+
+            # Get predictions
+            logits = self(curr_input_ids, mask=curr_attention_mask)
+            # Scale logits by temperature
+            scaled_logits = logits / temperature
+            
+            next_token = None
+            if not greedy:
+                # Split the key (JAX requires a fresh random key for every single random operation)
+                key, subkey = jax.random.split(key)
+                
+                # Sample from the probability distribution instead of using argmax
+                next_token = jax.random.categorical(subkey, scaled_logits, axis=-1)
+                
+                # Categorical returns a 1D array (batch,), so we expand it to (batch, 1) for concatenation
+                next_token = jnp.expand_dims(next_token, axis=-1)
+            else:
+                # argmax
+                next_token = jnp.argmax(scaled_logits, axis=-1, keepdims=True)
+            
+            if yield_token:
+                yield next_token
+
+            # Safely concatenate
+            input_ids = jnp.concatenate([input_ids, next_token], axis=1)
+            attention_mask = jnp.concatenate([attention_mask, jnp.ones((1, 1), dtype=jnp.int32)], axis=1)
+
+            del curr_input_ids, curr_attention_mask, logits, scaled_logits, next_token
+            gc.collect()
+        
+        if not yield_token:
+            return input_ids

@@ -4,14 +4,11 @@ import os
 # THIS MUST BE THE VERY FIRST THING IN THE SCRIPT.
 os.environ["JAX_PLATFORMS"] = "cpu"
 
-import jax
 from flax import nnx
-import jax.numpy as jnp
-from tqdm import tqdm # For a nice progress bar
 from transformers import AutoTokenizer
 
 from classes import BERTForCausalLM
-from utils import dynamic_batch_generator, save_model_weights, load_model_weights
+from utils import load_model_weights
 
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
@@ -52,35 +49,12 @@ next_token_id = model(encoded_inputs['input_ids'], encoded_inputs['attention_mas
 
 load_model_weights(model, "weights")
 
-max_new_tokens = 30
+max_new_tokens = 50
 input_ids = encoded_inputs['input_ids']
 attention_mask = encoded_inputs['attention_mask']
 
-key = jax.random.PRNGKey(1319) 
-temperature = 0.8 # The industry-standard sweet spot for generation
-
-for _ in tqdm(range(max_new_tokens)):
-    # Slice to strictly enforce the sliding window limit (max 64 tokens)
-    curr_input_ids = input_ids[:, -config.max_length:]
-    curr_attention_mask = attention_mask[:, -config.max_length:]
-    
-    # Get predictions
-    logits = model(curr_input_ids, mask=curr_attention_mask)
-    # Scale logits by temperature
-    scaled_logits = logits / temperature
-    
-    # Split the key (JAX requires a fresh random key for every single random operation)
-    key, subkey = jax.random.split(key)
-    
-    # Sample from the probability distribution instead of using argmax
-    next_token = jax.random.categorical(subkey, scaled_logits, axis=-1)
-    
-    # Categorical returns a 1D array (batch,), so we expand it to (batch, 1) for concatenation
-    next_token = jnp.expand_dims(next_token, axis=-1)
-    
-    # Safely concatenate
-    input_ids = jnp.concatenate([input_ids, next_token], axis=1)
-    attention_mask = jnp.concatenate([attention_mask, jnp.ones((1, 1), dtype=jnp.int32)], axis=1)
+temperature = 0.8
+output = model.generate(input_ids, attention_mask, max_new_tokens, temperature=temperature, greedy=False)
 
 print("\n--- Generated Output ---")
-print(tokenizer.decode(input_ids[0], skip_special_tokens=True))
+print(tokenizer.decode(output[0], skip_special_tokens=True))
