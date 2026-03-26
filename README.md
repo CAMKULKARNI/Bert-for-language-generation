@@ -6,7 +6,7 @@ This repository contains a custom implementation of a Causal Language Model (CLM
 
 - **Model Weights**:  ([Download here](https://drive.google.com/drive/folders/1QNjlbvicjo7TOA4wOuKxL9qNpCvb9QCu?usp=sharing)). *Note: The weights will need to be downloaded from the link into a directory named `weights` in the same directory as all the other files.*
 - **Medium Blog Post**: Read the full guide ([Medium Blog](https://medium.com/@camkoolkarni/forcing-a-bidirectional-encoder-to-decode-using-bert-to-generate-language-aa1fab6dd4d3))
-- **YouTube Video**: Watch the tutorial (Coming Soon)
+- **YouTube Video**: Watch the tutorial ([YouTube Video](https://youtu.be/J9FQ0Q66uhY))
 
 ## Architectural Overview
 
